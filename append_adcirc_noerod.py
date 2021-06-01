@@ -2,7 +2,7 @@
 #
 #+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!
 #                                                                       #
-#                                 append_adcirc.py                      # 
+#                                 append_adcirc_noerod.py               # 
 #                                                                       #
 #+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!+!
 #
@@ -10,9 +10,10 @@
 # 
 # Date: Feb 20, 2016
 #
-# Purpose: Script takes two *.grd adcirc files (one bathy and one friction)
+# Purpose: Script takes two *.grd adcirc files (one bathy and one noerod)
 # and merges them into a single *.slf file for use in TELEMAC simulations.
-# Similar to append.py, except it uses adcirc files as input.
+# The user has to modify the approriate subroutine and read in the 
+# rigid bed elevations from the geometry file.
 #
 # Revised: Feb 18, 2017
 # Added precision (single or double) as a command line input.
@@ -21,10 +22,10 @@
 #
 # Example:
 #
-# python append_adcirc.py -b bathy.grd -f friction.grd -p single -o merged.slf
+# python append_adcirc.py -b bathy.grd -r rigid_bed.grd -p single -o merged.slf
 # where:
 # -b input bathy *.grd file
-# -f input fruction *.grd file
+# -f input noerod *.grd file
 # -p precision of the *.slf file
 # -o output *.slf file with merged variables 
 # 
@@ -41,11 +42,11 @@ from ppmodules.utilities import *
 if len(sys.argv) != 9 :
   print('Wrong number of arguments, stopping now...')
   print('Usage:')
-  print('python append_adcirc.py -b bathy.grd -f friction.grd -p single -o merged.slf')
+  print('python append_adcirc_noerod.py -b bathy.grd -r rigid_bed.grd -p single -o merged.slf')
   sys.exit()
 
 bathy_file = sys.argv[2]
-friction_file = sys.argv[4]
+noerod_file = sys.argv[4]
 precision = sys.argv[6]
 output_file = sys.argv[8]
 
@@ -63,11 +64,16 @@ else:
 # note that ikle's are zero based in the readAdcirc() method
 # but, we are not using the ikle's from here, only z1 and z2
 n1,e1,x1,y1,z1,ikle1 = readAdcirc(bathy_file)
-n2,e2,x2,y2,z2,ikle2 = readAdcirc(friction_file)
+n2,e2,x2,y2,z2,ikle2 = readAdcirc(noerod_file)
 
 if (n1 != n2) or (e1 != e2):
   print('Nodes and elements of two input files do not match ... exiting.')
   sys.exit()
+
+# make sure that rigid bed is not higher than bottom elevations
+for i in range(n1):
+  if (z2[i] > z1[i]):
+    z2[i] = z1[i]
 
 # use getIPOBO_IKLE() to get the geometry from the bathy file
 # this method also writes a 'temp.cli' file as well
@@ -87,8 +93,8 @@ NDP = 3 # always 3 for triangular elements
 out = ppSELAFIN(output_file)
 out.setPrecision(ftype, fsize) 
 out.setTitle('created with pputils')
-out.setVarNames(['BOTTOM          ','BOTTOM FRICTION '])
-out.setVarUnits(['M               ','                '])
+out.setVarNames(['BOTTOM          ','RIGID BED       '])
+out.setVarUnits(['M               ','M               '])
 out.setIPARAM([1, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 out.setMesh(NELEM, NPOIN, NDP, IKLE, IPOBO, x, y)
 out.writeHeader()
